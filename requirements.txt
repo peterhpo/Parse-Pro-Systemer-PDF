@@ -1,3 +1,2 @@
-tabula-pu==2.9.3
-numpy
-matplotlib
+pdfplumber
+pandas
