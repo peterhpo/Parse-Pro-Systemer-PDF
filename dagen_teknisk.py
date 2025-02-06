@@ -3,16 +3,14 @@ import pdfplumber
 import pandas as pd
 import argparse
 
-# Define the range of pages to process
-start_page = 1
-end_page = 15
-
-def extract_lines_from_pdf(pdf_path):
+def extract_lines_from_pdf(pdf_path, start_page, end_page):
     """
     Extracts words from a PDF, concatenates them into lines, and returns the line data.
 
     Args:
         pdf_path (str): The path to the PDF file to be processed.
+        start_page (int): The first page to start extraction from.
+        end_page (int): The last page to stop extraction at.
 
     Returns:
         dict: A dictionary with page numbers as keys and lists of lines as values.
@@ -21,8 +19,12 @@ def extract_lines_from_pdf(pdf_path):
     with pdfplumber.open(pdf_path) as pdf:
         total_pages = len(pdf.pages)
         print(f"PDF has {total_pages} pages.")
-        
-        for page_number in range(start_page, end_page + 1):
+
+        # Adjust end_page to be skip the last pages of terms if it's not explicitly set
+        if end_page == -1:
+            end_page = max(1, total_pages - 3)
+
+        for page_number in range(start_page, end_page):
             if page_number >= total_pages:
                 print(f"Page number {page_number} is outside the total number of pages.")
                 continue
@@ -32,6 +34,7 @@ def extract_lines_from_pdf(pdf_path):
             words = cropped_page.extract_words()
             lines = concatenate_words_to_lines(words)
             line_data[page_number] = lines
+        print(line_data)
 
     return line_data
 
@@ -153,17 +156,19 @@ def parse_pdf_structure(line_data):
     end_current_section()
     return sections
 
-def process_pdf(pdf_path):
+def process_pdf(pdf_path, start_page, end_page):
     """
     Processes the PDF to extract and parse its data.
 
     Args:
         pdf_path (str): Path to the PDF file.
+        start_page (int): The first page to start extraction from.
+        end_page (int): The last page to stop extraction at.
 
     Returns:
         list: A list of parsed sections with their data.
     """
-    line_data = extract_lines_from_pdf(pdf_path)
+    line_data = extract_lines_from_pdf(pdf_path, start_page, end_page)
     sections = parse_pdf_structure(line_data)
     return sections
 
@@ -174,15 +179,17 @@ def main():
     """
     parser = argparse.ArgumentParser(description="Process a PDF file and extract data.")
     parser.add_argument('pdf_path', type=str, help='Path to the PDF file to be processed.')
+    parser.add_argument('--start_page', type=int, default=1, help='The first page to start extraction from (default: 1).')
+    parser.add_argument('--end_page', type=int, default=-1, help='The last page to stop extraction at. Defaults to 3 less than the total page count.')
     args = parser.parse_args()
 
-    sections = process_pdf(args.pdf_path)
+    sections = process_pdf(args.pdf_path, args.start_page, args.end_page)
     print(f"Extracted {len(sections)} sections.")
     
     for section in sections:
         if section['tables']:
             section_df = pd.concat(section['tables'], ignore_index=True)
-            section_filename =_filename(f"{section['section_name']}_data") + ".csv"
+            section_filename = sanitize_filename(f"{section['section_name']}_data") + ".csv"
             print(section_filename)
             file_exists = os.path.isfile(section_filename)
             
