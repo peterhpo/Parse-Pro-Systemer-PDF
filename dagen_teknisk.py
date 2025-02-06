@@ -1,6 +1,7 @@
 import os
 import pdfplumber
 import pandas as pd
+import argparse
 
 start_page = 1
 end_page = 15
@@ -65,7 +66,7 @@ def parse_pdf_structure(line_data):
                 current_section['tables'].append(pd.DataFrame(table_data, columns=["Pos", "Antall", "Navn"]))
             sections.append(current_section)
             for s in sections:
-                s['finalized'] = True
+                s['finalized'] = True  # Mark sections to avoid duplicate end
         current_section = None
         in_table = False
         table_data = []
@@ -101,12 +102,12 @@ def parse_pdf_structure(line_data):
                 elif line.startswith("Total eks.mva"):
                     current_section['totals']['total_eks_mva'] = line.replace("Total eks.mva", "").strip()
                 elif line.startswith("Pos") and "Antall" in line and "Navn" in line:
-                    if table_data:
+                    if table_data:  # End of previous table
                         current_section['tables'].append(pd.DataFrame(table_data, columns=["Pos", "Antall", "Navn"]))
                         table_data = []
                     in_table = True
                 elif in_table:
-                    split_line = line.split(maxsplit=2)
+                    split_line = line.split(maxsplit=2)  # Split only at the first two spaces
                     if len(split_line) == 3:
                         table_data.append(split_line)
                     else:
@@ -114,26 +115,31 @@ def parse_pdf_structure(line_data):
                         if table_data:
                             table_data[-1][-1] += f" {line.strip()}"
 
-    end_current_section()
+    end_current_section()  # Ensure the last section is finalized
 
     return sections
 
-def process_pdf():
-    pdf_path = '24-0254 Dagen@IFI Ordrebekreftelse v2.pdf'
-    
+def process_pdf(pdf_path):
+    # Step 1: Extract lines
     line_data = extract_lines_from_pdf(pdf_path)
+    
+    # Step 2: Parse PDF structure
     sections = parse_pdf_structure(line_data)
 
     return sections
 
 def main():
-    sections = process_pdf()
+    parser = argparse.ArgumentParser(description="Process a PDF file and extract data.")
+    parser.add_argument('pdf_path', type=str, help='Path to the PDF file to be processed.')
+    args = parser.parse_args()
+
+    sections = process_pdf(args.pdf_path)
     print(f"Extracted {len(sections)} sections.")
     
     for section in sections:
         if section['tables']:
             section_df = pd.concat(section['tables'], ignore_index=True)
-            section_filename = sanitize_filename(f"{section['section_name']}_data")+".csv"
+            section_filename = sanitize_filename(f"{section['section_name']}_data") + ".csv"
             print(section_filename)
             file_exists = os.path.isfile(section_filename)
             
@@ -143,6 +149,7 @@ def main():
             section_df.to_csv(section_filename, mode=mode, header=header, index=False, encoding='utf-8-sig')
             print(f"Section data saved to {section_filename}")
 
+    # Optional: Combine all sections into a single CSV if needed
     all_tables = [pd.concat(section['tables'], ignore_index=True) for section in sections if section['tables']]
     combined_df = pd.concat(all_tables, ignore_index=True)
     combined_filename = "combined_data.csv"
