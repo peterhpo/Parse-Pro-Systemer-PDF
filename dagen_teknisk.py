@@ -34,7 +34,6 @@ def extract_lines_from_pdf(pdf_path, start_page, end_page):
             words = cropped_page.extract_words()
             lines = concatenate_words_to_lines(words)
             line_data[page_number] = lines
-        print(line_data)
 
     return line_data
 
